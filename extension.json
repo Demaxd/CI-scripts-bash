@@ -1,0 +1,10 @@
+{
+  "name": "CI_Extension",
+  "displayName": "CI Extension",
+  "version": "1.0.0",
+  "vendor": "ShabuninDS",
+  "sourceDir": "src/cfe/CI_Extension",
+  "safeMode": false,
+  "unsafeActionProtection": false,
+  "usePurposes": ["Customization"]
+}

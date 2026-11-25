@@ -1,0 +1,53 @@
+{
+
+  "environment": {
+
+    "v8_path": "E:/Software/Platform/8.3.27.2130/bin/1cv8.exe",
+    "vrunner_path": "vrunner.bat",
+    "edt_cli_path": "1cedtcli.exe"
+
+  },
+
+  "directories": {
+
+    "src_cfe": "src/cfe",
+    "src_cf": "src/cf",
+    "build_xml": "build/xml",
+    "build_cfe": "build/cfe",
+    "build_cf": "build/cf",
+    "edt_workspace": "build/edtWS"
+
+  },
+
+  "cluster": {
+
+    "user": "Администратор",
+    "password": ""
+  },
+
+  "cf_source": {
+    
+    "name": "main_conf",
+    "connection_string": "\"/FE:\\1C\\DB\\File\\83Demo_clear\""
+  
+  },
+
+  "cf_receiver": {
+
+    "update_from_cf": "true",
+    "connection_string": "\"/FE:\\1C\\DB\\File\\83Demo_clear\""
+
+  },
+
+  "extensions": [
+
+    {
+      "name": "CI_Ext",
+      "repo_url": "https://github.com/Demaxd/CI_Ext.git"
+
+    }
+
+  ]
+
+
+}

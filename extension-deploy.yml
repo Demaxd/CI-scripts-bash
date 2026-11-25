@@ -1,0 +1,170 @@
+# ═══════════════════════════════════════════════════════════════════
+#        УНИВЕРСАЛЬНЫЙ ШАБЛОН СБОРКИ И ДЕПЛОЯ РАСШИРЕНИЙ 1С (EDT)
+# ═══════════════════════════════════════════════════════════════════
+
+spec:
+  inputs:
+    extension_name:
+      description: "Имя расширения"
+    source_dir:
+      description: "Путь к исходникам EDT"
+      default: "src/cfe"
+    auto_deploy_dev:
+      description: "Автодеплой в dev"
+      default: true
+    run_tests:
+      description: "Запускать тесты"
+      default: false
+
+---
+
+variables:
+  EXTENSION_NAME: $[[ inputs.extension_name ]]
+  SOURCE_DIR: $[[ inputs.source_dir ]]
+  GIT_DEPTH: 1
+
+default:
+  tags:
+    - 1c-runner
+  before_script:
+    - chmod +x scripts/*.sh scripts/**/*.sh 2>/dev/null || true
+
+stages:
+  - validate
+  - build
+  - test
+  - deploy:dev
+  - deploy:test
+  - deploy:prod
+  - verify
+
+# ═══════════════════════════════════════════════════════════════════
+#                         ВАЛИДАЦИЯ
+# ═══════════════════════════════════════════════════════════════════
+
+validate:sources:
+  stage: validate
+  script:
+    - |
+      echo "Проверка исходников..."
+      
+      if [[ ! -f "extension.json" ]]; then
+        echo "❌ extension.json не найден"
+        exit 1
+      fi
+      
+      if [[ ! -d "${SOURCE_DIR}" ]]; then
+        echo "❌ Директория исходников не найдена: ${SOURCE_DIR}"
+        exit 1
+      fi
+      
+      if [[ -f "${SOURCE_DIR}/Configuration.mdo" ]]; then
+        echo "✅ Формат EDT обнаружен"
+      elif [[ -f "${SOURCE_DIR}/Configuration.xml" ]]; then
+        echo "✅ Формат XML обнаружен"
+      else
+        echo "❌ Не удалось определить формат исходников"
+        exit 1
+      fi
+      
+      echo "✅ Валидация пройдена"
+
+# ═══════════════════════════════════════════════════════════════════
+#                         СБОРКА
+# ═══════════════════════════════════════════════════════════════════
+
+build:cfe:
+  stage: build
+  needs:
+    - validate:sources
+  script:
+    - scripts/build/build-extension.sh . .build/cfe
+  artifacts:
+    paths:
+      - .build/cfe/*.cfe
+      - .build/cfe/build-info.json
+    reports:
+      dotenv: .build/build.env
+    expire_in: 7 days
+
+# ═══════════════════════════════════════════════════════════════════
+#                         ТЕСТЫ
+# ═══════════════════════════════════════════════════════════════════
+
+test:syntax:
+  stage: test
+  needs:
+    - build:cfe
+  script:
+    - |
+      echo "Синтаксический контроль..."
+      # Здесь можно добавить проверку через EDT Ripper, SonarQube и т.д.
+  rules:
+    - if: $[[ inputs.run_tests ]] == true
+  allow_failure: true
+
+# ═══════════════════════════════════════════════════════════════════
+#                         ДЕПЛОЙ
+# ═══════════════════════════════════════════════════════════════════
+
+.deploy_template:
+  needs:
+    - build:cfe
+  script:
+    - |
+      CFE_FILE=$(find .build/cfe -name "*.cfe" | head -1)
+      scripts/deploy/deploy-extension.sh . ${TARGET_ENV}
+  environment:
+    name: $TARGET_ENV
+
+deploy:to-dev:
+  extends: .deploy_template
+  stage: deploy:dev
+  variables:
+    TARGET_ENV: dev
+  environment:
+    name: development
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop" && $[[ inputs.auto_deploy_dev ]] == true
+    - if: $CI_COMMIT_BRANCH == "develop"
+      when: manual
+
+deploy:to-test:
+  extends: .deploy_template
+  stage: deploy:test
+  variables:
+    TARGET_ENV: test
+  environment:
+    name: testing
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      when: manual
+
+deploy:to-prod:
+  extends: .deploy_template
+  stage: deploy:prod
+  variables:
+    TARGET_ENV: prod
+  environment:
+    name: production
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
+      allow_failure: false
+
+# ═══════════════════════════════════════════════════════════════════
+#                         ВЕРИФИКАЦИЯ
+# ═══════════════════════════════════════════════════════════════════
+
+verify:installation:
+  stage: verify
+  needs:
+    - job: deploy:to-dev
+      optional: true
+    - job: deploy:to-test
+      optional: true
+    - job: deploy:to-prod
+      optional: true
+  script:
+    - scripts/verify/verify-extension.sh ${TARGET_ENV} ${EXTENSION_NAME}
+  when: on_success
